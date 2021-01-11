@@ -43,7 +43,6 @@ class MultiMarkovLog:
 
         # Actual data
         self.discrete_histories = None
-        self.continuous_histories = None
         self.continuous_aggregate = None
         self.data_graph = None
         self.dwell_time_graph = None
@@ -153,25 +152,22 @@ class MultiMarkovLog:
             continuous_history_df = pd.DataFrame(
                 continuous_history, columns=column_names)
 
-            self.continuous_histories.append(continuous_history_df)
 
             cutoff = floor(self.sample_rate * self.time)
             # Add the signal to the aggregate signal - note this is still without noise
             if type(self.continuous_aggregate) == type(None):
-                # Initialise aggregate history
-                self.continuous_aggregate = pd.DataFrame(continuous_history[:cutoff], columns=[
-                                                         f'State of Channel {idx}', 'Channels', 'Time'])
+
+                # Initialise aggregate history, ignoring the states for performance
+                self.continuous_aggregate = pd.DataFrame(continuous_history[:cutoff, 1:],
+                                                         columns=['Channels', 'Time'])
             else:
                 # Otherwise add a new column for the new state and add the channels on
-                self.continuous_aggregate[f'State of Channel {idx}'] = continuous_history_df[[
-                    'State']][:cutoff]
                 self.continuous_aggregate[[
-                    'Channels']] = self.continuous_aggregate[["Channels"]][:cutoff].astype(int) + continuous_history_df[['Channels']][:cutoff].astype(int)
-                print(self.continuous_aggregate)
-                print(continuous_history_df)
+                    'Channels']] = self.continuous_aggregate[["Channels"]][:cutoff].astype(int) + continuous_history[:cutoff, 1:2].astype(int)
+
         # Make the aggregate signal noisy (bit of a hack here)
         noisy = self.noise.make_noisy(
-            self.continuous_aggregate[['State of Channel 0', 'Channels', 'Time']].to_numpy())
+            self.continuous_aggregate[['Channels', 'Time']].to_numpy(), channels_index=0)
 
         self.continuous_aggregate["Noisy Current"] = noisy
         return self
@@ -180,7 +176,6 @@ class MultiMarkovLog:
 
         # Number of points to plot
         lenny = int(length * self.sample_rate)
-
         # Truncate the dataframe to only include points of interest
         truncated_history_df = self.continuous_aggregate[:lenny]
 
